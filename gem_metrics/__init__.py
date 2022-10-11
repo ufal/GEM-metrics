@@ -354,8 +354,22 @@ def process_files(config):
         cache.stats(enable=True)
 
     # load system predictions
-    with open(config.predictions_file, encoding="UTF-8") as fh:
-        data = json.load(fh)
+    if config.predictions_file.endswith(".json"):
+        with open(config.predictions_file, encoding='UTF-8') as fh:
+            data = json.load(fh)
+    else:
+        # ================================================================
+        # ng-nlg: allow loading plaintext system outputs containing one prediction per line
+        with open(config.predictions_file) as f:
+            lines = [x.rstrip("\n") for x in f.readlines()]
+            data = {
+                "language" : "en",
+                "task" : "data2text",
+                "values" : [
+                    {"generated" : x } for x in lines
+                ]
+            }
+        # ================================================================
 
     # multi-file submissions
     if isinstance(data, dict) and "submission_name" in data:
@@ -461,7 +475,26 @@ def process_files(config):
 
         # load references, if available
         if config.references_file is not None:
-            refs = References(config.references_file)
+            # =======================================
+            # # ng-nlg: load our own custom JSON format
+            with open(config.references_file, encoding='UTF-8') as fh:
+                if config.references_file.endswith("json"):
+                    j = json.load(fh)
+                    refs = [[x["out"]] for x in j["data"]]
+                else:
+                    refs = fh.read().rstrip("\n").split("\n\n")
+                    refs = [x.split("\n") for x in refs]
+
+            ref_data = {
+                "language" : "en",
+                "values" : [
+                    {"target" : x } for x in refs
+                ]
+            }
+            refs = References(ref_data)
+            # =======================================
+
+            # refs = References(config.references_file)
             assert len(refs) == len(outs)
 
             # Ensure that they are not scrambled.
